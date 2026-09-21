@@ -161,8 +161,11 @@ jobs:
 
         echo "===== 4. 更新 feeds ====="
         cd openwrt
-        find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1
+
+        find ./staging_dir/ -exec touch {} + >/dev/null 2>&1 || true
+
         ./scripts/feeds update -a
+
         cd ..
 
         echo "===== 5. target 补丁 ====="
