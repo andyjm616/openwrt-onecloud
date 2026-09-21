@@ -135,7 +135,7 @@ jobs:
         restore-keys: |
           ${{ env.REPO_BRANCH }}-toolchain-cache
 
-     - name: patch修补
+    - name: patch修补
       run: |
         # APK 补丁
         if [ -d patch/apk-tools ] && compgen -G "patch/apk-tools/*.patch" > /dev/null; then
@@ -318,5 +318,3 @@ jobs:
       with:
         keep_latest: 1
         delete_tags: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
