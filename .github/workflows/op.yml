@@ -137,71 +137,50 @@ jobs:
 
     - name: patch修补
       run: |
-        # APK 补丁
+        set -x
+
+        echo "===== 1. 检查 APK patch ====="
         if [ -d patch/apk-tools ] && compgen -G "patch/apk-tools/*.patch" > /dev/null; then
-          cp -rf patch/apk-tools/*.patch openwrt/package/system/apk/patches/
+          echo "发现 APK patch:"
+          ls -la patch/apk-tools/
+          mkdir -p openwrt/package/system/apk/patches
+          cp -vf patch/apk-tools/*.patch openwrt/package/system/apk/patches/
+        else
+          echo "没有 APK patch，跳过"
         fi
 
-        # OpenWrt 内核配置
-        curl -fsSL https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in \
+        echo "===== 2. 下载 Config-kernel.in ====="
+        curl -fL --retry 3 --retry-delay 5 --retry-all-errors \
+          https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in \
           -o openwrt/config/Config-kernel.in
+        echo "Config-kernel.in 下载成功"
 
-        # 修改 feeds 地址
+        echo "===== 3. 修改 feeds ====="
         sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' \
           openwrt/feeds.conf.default
 
+        echo "===== 4. 更新 feeds ====="
         cd openwrt
-
         find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1
-
         ./scripts/feeds update -a
-
         cd ..
 
-        # target 补丁
+        echo "===== 5. target 补丁 ====="
         if [ -d patch/target ]; then
           cp -rf patch/target openwrt/
         fi
 
-        # LuCI 补丁
+        echo "===== 6. LuCI 补丁 ====="
         if [ -d patch/luci ] && compgen -G "patch/luci/*.patch" > /dev/null; then
-          cp -rf patch/luci/*.patch openwrt/feeds/luci/
+          cp -vf patch/luci/*.patch openwrt/feeds/luci/
         fi
 
-        # DIY 补丁
+        echo "===== 7. DIY 补丁 ====="
         if [ -d patch/diy ]; then
           cp -rf patch/diy openwrt/
         fi
 
-    - name: 加载自定义脚本
-      run: |
-        chmod +x $DIY_P1_SH
-
-        # sh/op.sh 原本会删除 Samba4
-        # 这里把 Samba4 从删除列表中移除
-        sed -i 's/luci-app-dockerman,luci-app-samba4,luci-app-aria2/luci-app-dockerman,luci-app-aria2/' $DIY_P1_SH
-        sed -i 's/{samba4,v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}/{v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}/' $DIY_P1_SH
-
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
-        cd ..
-
-        # 删除 OpenWrt 自带的相关代理核心
-        # 使用 PassWall 官方 packages 提供的版本
-        rm -rf openwrt/feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
-
-        # PassWall 官方核心 packages
-        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git openwrt/package/passwall-packages
-
-        # PassWall 官方 LuCI
-        rm -rf openwrt/feeds/luci/applications/luci-app-passwall
-        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall.git openwrt/package/passwall-luci
-
-        echo "PassWall source added."
-
-        # 原来的 nginx 定制
-        [ -e patch ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files
+        echo "===== patch修补完成 ====="
 
     - name: 添加玩客云
       run: |
