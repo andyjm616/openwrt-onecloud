@@ -186,7 +186,7 @@ jobs:
         echo "===== patch修补完成 ====="
 
     - name: 添加玩客云
-  run: |
+      run: |
     git clone --depth=1 https://github.com/shiyu1314/s805.git -b 6.12 openwrt/target/linux/amlogic
 
     - name: 加载自定义配置
