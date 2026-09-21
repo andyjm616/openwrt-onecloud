@@ -6,33 +6,33 @@ on:
 
     inputs:
       ENABLE_DHCP:
-        description: '是否开启DHCP'     
+        description: '是否开启DHCP'
         required: false
         default: 'false'
-        type: boolean 
+        type: boolean
 
       OP_IP:
-        description: '静态IP地址'     
+        description: '静态IP地址'
         required: false
-        default: '192.168.2.2' 
+        default: '192.168.5.6'
         type: string
 
       OP_rootfs:
-        description: '预设镜像大小'     
+        description: '预设镜像大小'
         required: false
-        default: '600' 
+        default: '800'
         type: string
 
       OP_author:
-        description: '定制作者'     
+        description: '定制作者'
         required: false
-        default: 'shiyu1314' 
-        type: string    
+        default: 'shiyu1314'
+        type: string
 
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
         required: false
-        default: 'luci-app-dockerman luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-momo luci-app-samba4 luci-app-openlist2'
+        default: 'luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-samba4'
         type: string
 
 env:
@@ -42,6 +42,7 @@ jobs:
   build_firmware:
     name: 编译固件 - ${{ matrix.device }} - ${{ matrix.source }}
     runs-on: ubuntu-22.04
+
     strategy:
       matrix:
         device: ["玩客云-ws1608"]
@@ -50,8 +51,8 @@ jobs:
           - device: "玩客云-ws1608"
             config: "CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y"
 
+    steps:
 
-    steps: 
     - name: 检查分支
       uses: actions/checkout@v4
 
@@ -78,7 +79,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y tar img2simg build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-distutils python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils
         sudo apt-get clean
-        git config --global user.name 'GitHub Actions' && git config --global user.email 'noreply@github.com'
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'noreply@github.com'
         sudo timedatectl set-timezone 'Asia/Shanghai'
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
@@ -102,7 +104,7 @@ jobs:
         df -hT $PWD
         git clone $REPO_URL openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
-        
+
     - name: 切换分支
       working-directory: ./openwrt
       id: var
@@ -123,7 +125,7 @@ jobs:
             ;;
         esac
         echo "release_tag=$_release_tag" >> $GITHUB_ENV
-        
+
     - name: 取回缓存 staging_dir
       uses: actions/cache@v4
       with:
@@ -131,8 +133,8 @@ jobs:
           openwrt/staging_dir
         key: ${{ env.REPO_BRANCH }}-toolchain-cache
         restore-keys: |
-          ${{ env.REPO_BRANCH }}-toolchain-cache 
-            
+          ${{ env.REPO_BRANCH }}-toolchain-cache
+
     - name: patch修补
       run: |
         [ -e patch ] && cp -rf patch/apk-tools/*.patch openwrt/package/system/apk/patches
@@ -145,24 +147,45 @@ jobs:
         [ -e patch ] && cp -rf patch/target openwrt
         [ -e patch ] && cp -rf patch/luci/*.patch openwrt/feeds/luci
         [ -e patch ] && cp -rf patch/diy/*.patch openwrt
-        
+
     - name: 加载自定义脚本
       run: |
         chmod +x $DIY_P1_SH
+
+        # sh/op.sh 原本会删除 Samba4
+        # 这里把 Samba4 从删除列表中移除
+        sed -i 's/luci-app-dockerman,luci-app-samba4,luci-app-aria2/luci-app-dockerman,luci-app-aria2/' $DIY_P1_SH
+        sed -i 's/{samba4,v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}/{v2ray-geodata,mosdns,sing-box,aria2,ariang,adguardhome}/' $DIY_P1_SH
+
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
         cd ..
+
+        # 删除 OpenWrt 自带的相关代理核心
+        # 使用 PassWall 官方 packages 提供的版本
+        rm -rf openwrt/feeds/packages/net/{xray-core,v2ray-geodata,sing-box,chinadns-ng,dns2socks,hysteria,ipt2socks,microsocks,naiveproxy,shadowsocks-rust,shadowsocksr-libev,simple-obfs,tcping,v2ray-plugin,xray-plugin,geoview,shadow-tls}
+
+        # PassWall 官方核心 packages
+        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git openwrt/package/passwall-packages
+
+        # PassWall 官方 LuCI
+        rm -rf openwrt/feeds/luci/applications/luci-app-passwall
+        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall.git openwrt/package/passwall-luci
+
+        echo "PassWall source added."
+
+        # 原来的 nginx 定制
         [ -e patch ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support
         [ -e patch ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files
 
-        
     - name: 添加玩客云
       run: |
         git clone https://shiyu1314:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/shiyu1314/s805 -b 6.12 openwrt/target/linux/amlogic
-         
+
     - name: 加载自定义配置
       run: |
         [ -e files ] && mv files openwrt/files
+
         cat <<EOF >>openwrt/.config
         CONFIG_TARGET_amlogic=y
         CONFIG_TARGET_amlogic_meson8b=y
@@ -172,37 +195,50 @@ jobs:
         CONFIG_KERNEL_EXT4_FS_SECURITY=y
         # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
         EOF
-        
+
         [ -e config ] && cat config/config-common >> openwrt/.config
-        
+
         if [[ "${{ github.event.inputs.ENABLE_DHCP }}" == "false" ]]; then
           rm -rf openwrt/files/etc/uci-defaults/dhcp-lan
           sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" openwrt/package/base-files/files/bin/config_generate
         fi
-        
+
+        # 自定义插件
         IFS=' ' read -r -a plugins <<< "${{ github.event.inputs.CUSTOM_PLUGINS }}"
         for plugin in "${plugins[@]}"; do
           echo "CONFIG_PACKAGE_${plugin}=y" >> openwrt/.config
-        done    
-    
+        done
+
+        # PassWall
+        echo "CONFIG_PACKAGE_luci-app-passwall=y" >> openwrt/.config
+
     - name: 下载编译依赖
       id: package
       run: |
         cd openwrt
+
+        # 让 OpenWrt 根据 PassWall Makefile 自动解析依赖
         make defconfig
+
         make download -j8
+
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
-    
+
     - name: 编译源码
       id: compile
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
+
         make -j$(nproc) || make -j1 || make -j1 V=s
+
         echo "status=success" >> $GITHUB_OUTPUT
+
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+
         [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: 查看磁盘使用情况
@@ -213,19 +249,25 @@ jobs:
       id: organize
       run: |
         gunzip openwrt/bin/targets/*/*/*.gz
+
         for f in openwrt/bin/targets/*/*/*.img; do
           xz -9 --threads=0 --compress "$f"
         done
+
         rm -rf openwrt/bin/targets/*/*/*.img
         rm -rf openwrt/bin/targets/*/*/*.gz
+
         cd openwrt/bin/targets/*/*
+
         mv *.xz ${{ env.REPO_BRANCH }}-k6.12-onecloud_burn.img.xz
+
         rm -rf packages
         rm -rf *.buildinfo
         rm -rf profiles.json
         rm -rf *.manifest
         rm -rf *.sha
         rm -rf sha256sums
+
         echo "FIRMWARE=$PWD" >> $GITHUB_ENV
 
     - name: 上传固件到Releases
@@ -242,7 +284,7 @@ jobs:
            静态IP：${{ github.event.inputs.OP_IP }}
            DHCP状态：${{ github.event.inputs.ENABLE_DHCP }}
            插件：${{ github.event.inputs.CUSTOM_PLUGINS }}
-           定制作者：${{ github.event.inputs.OP_author }}
+           定制作者：${{ env.OP_author }}
            扩容：sh 1.sh
            默认密码：无
 
@@ -252,4 +294,4 @@ jobs:
         keep_latest: 1
         delete_tags: true
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}     
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
