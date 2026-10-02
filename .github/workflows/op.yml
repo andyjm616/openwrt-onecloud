@@ -285,6 +285,24 @@ jobs:
         # 让 OpenWrt 根据 PassWall Makefile 自动解析依赖
         make defconfig
 
+        # OpenWrt 25.12 默认可能选中 OpenWrt One；这里强制锁定玩客云。
+        ./scripts/config --disable CONFIG_TARGET_mediatek
+        ./scripts/config --disable CONFIG_TARGET_mediatek_filogic
+        ./scripts/config --disable CONFIG_TARGET_mediatek_filogic_DEVICE_openwrt_one
+        ./scripts/config --enable CONFIG_TARGET_amlogic
+        ./scripts/config --enable CONFIG_TARGET_amlogic_meson8b
+        ./scripts/config --enable CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud
+
+        echo "===== 最终 target 检查 ====="
+        grep '^CONFIG_TARGET_' .config | grep -E 'amlogic|mediatek' || true
+
+        grep -qx 'CONFIG_TARGET_amlogic=y' .config
+        grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+        grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_openwrt_one=y' .config
+
         make download -j8
 
         find dl -size -1024c -exec ls -l {} \;
