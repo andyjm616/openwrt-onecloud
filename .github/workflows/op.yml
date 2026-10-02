@@ -160,8 +160,8 @@ jobs:
           openwrt/feeds.conf.default
         # PassWall 25.12+：源码编译，避免运行时再手工补 APK 依赖
         {
-          echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages.git;main'
-          echo 'src-git passwall_luci https://github.com/xiaorouji/openwrt-passwall.git;main'
+          echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main'
+          echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main'
         } >> openwrt/feeds.conf.default
 
         echo "===== 4. 更新 feeds ====="
