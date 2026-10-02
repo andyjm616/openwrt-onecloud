@@ -196,10 +196,15 @@ jobs:
           https://github.com/garypang13/Actions-OpenWrt-Nginx.git \
           /tmp/onecloud-source
 
-        rm -rf target/linux/amlogic
+        # 先克隆到临时目录，再完整复制 target/linux/amlogic。
+        rm -rf /tmp/lede-amlogic target/linux/amlogic
         git clone --depth=1 --branch master \
           https://github.com/coolsnowwolf/lede.git \
-          target/linux/amlogic
+          /tmp/lede-amlogic
+        test -f /tmp/lede-amlogic/image/meson8b.mk
+        mkdir -p target/linux/amlogic
+        cp -a /tmp/lede-amlogic/. target/linux/amlogic/
+        test -f target/linux/amlogic/image/meson8b.mk
 
         # LEDE 当前 Amlogic target 使用 6.6 目录；本工作流的 25.12 内核为 6.12。
         if [ -d target/linux/amlogic/patches-6.6 ]; then
