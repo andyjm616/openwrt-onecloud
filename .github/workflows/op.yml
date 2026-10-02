@@ -158,6 +158,11 @@ jobs:
         echo "===== 3. 修改 feeds ====="
         sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' \
           openwrt/feeds.conf.default
+        # PassWall 25.12+：源码编译，避免运行时再手工补 APK 依赖
+        {
+          echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages.git;main'
+          echo 'src-git passwall_luci https://github.com/xiaorouji/openwrt-passwall.git;main'
+        } >> openwrt/feeds.conf.default
 
         echo "===== 4. 更新 feeds ====="
         cd openwrt
@@ -165,6 +170,7 @@ jobs:
         find ./staging_dir/ -exec touch {} + >/dev/null 2>&1 || true
 
         ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
         cd ..
 
@@ -201,9 +207,9 @@ jobs:
         git clone --depth=1 --branch master \
           https://github.com/coolsnowwolf/lede.git \
           /tmp/lede-amlogic
-        test -f /tmp/lede-amlogic/image/meson8b.mk
+        test -f /tmp/lede-amlogic/target/linux/amlogic/image/meson8b.mk
         mkdir -p target/linux/amlogic
-        cp -a /tmp/lede-amlogic/. target/linux/amlogic/
+        cp -a /tmp/lede-amlogic/target/linux/amlogic/. target/linux/amlogic/
         test -f target/linux/amlogic/image/meson8b.mk
 
         # LEDE 当前 Amlogic target 使用 6.6 目录；本工作流的 25.12 内核为 6.12。
