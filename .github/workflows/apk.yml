@@ -101,17 +101,50 @@ jobs:
             
     - name: patch修补
       run: |
-        [ -e patch ] && cp -rf patch/apk-tools/*.patch openwrt/package/system/apk/patches
-        curl -s https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in > openwrt/config/Config-kernel.in
-        sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' openwrt/feeds.conf.default
+        set -x
+
+        echo "===== 1. 检查 APK patch ====="
+        if [ -d patch/apk-tools ] && compgen -G "patch/apk-tools/*.patch" > /dev/null; then
+          echo "发现 APK patch:"
+          ls -la patch/apk-tools/
+          mkdir -p openwrt/package/system/apk/patches
+          cp -vf patch/apk-tools/*.patch openwrt/package/system/apk/patches/
+        else
+          echo "没有 APK patch，跳过"
+        fi
+
+        echo "===== 2. 下载 Config-kernel.in ====="
+        curl -fL --retry 3 --retry-delay 5 --retry-all-errors \
+          https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in \
+          -o openwrt/config/Config-kernel.in
+        echo "Config-kernel.in 下载成功"
+
+        echo "===== 3. 修改 feeds ====="
+        sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' \
+          openwrt/feeds.conf.default
+
+        echo "===== 4. 更新 feeds ====="
         cd openwrt
-        find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1
+        find ./staging_dir/ -exec touch {} + >/dev/null 2>&1 || true
         ./scripts/feeds update -a
         cd ..
-        [ -e patch ] && cp -rf patch/target openwrt
-        [ -e patch ] && cp -rf patch/luci/*.patch openwrt/feeds/luci
-        [ -e patch ] && cp -rf patch/diy/*.patch openwrt
-        [ -e patch ] && cp -rf patch/keys/* openwrt
+
+        echo "===== 5. target 补丁 ====="
+        if [ -d patch/target ]; then
+          cp -rf patch/target openwrt/
+        fi
+
+        echo "===== 6. LuCI 补丁 ====="
+        if [ -d patch/luci ] && compgen -G "patch/luci/*.patch" > /dev/null; then
+          cp -vf patch/luci/*.patch openwrt/feeds/luci/
+        fi
+
+        echo "===== 7. DIY 补丁 ====="
+        if [ -d patch/diy ]; then
+          cp -rf patch/diy openwrt/
+        fi
+
+        echo "===== patch修补完成 ====="
         
     - name: 加载自定义脚本
       run: |
