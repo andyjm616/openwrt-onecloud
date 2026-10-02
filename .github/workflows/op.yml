@@ -212,18 +212,18 @@ jobs:
         cp -a /tmp/lede-amlogic/target/linux/amlogic/. target/linux/amlogic/
         test -f target/linux/amlogic/image/meson8b.mk
 
-        # LEDE 当前 Amlogic target 使用 6.6 目录；本工作流的 25.12 内核为 6.12。
-        if [ -d target/linux/amlogic/patches-6.6 ]; then
-          mv target/linux/amlogic/patches-6.6 target/linux/amlogic/patches-6.12
+        # LEDE 当前 Amlogic target 已使用 6.18；本工作流的 OpenWrt 25.12 内核为 6.12。
+        if [ -d target/linux/amlogic/patches-6.18 ]; then
+          mv target/linux/amlogic/patches-6.18 target/linux/amlogic/patches-6.12
         fi
-        if [ -f target/linux/amlogic/config-6.6 ]; then
-          mv target/linux/amlogic/config-6.6 target/linux/amlogic/config-6.12
+        if [ -f target/linux/amlogic/config-6.18 ]; then
+          mv target/linux/amlogic/config-6.18 target/linux/amlogic/config-6.12
         fi
-        if [ -f target/linux/amlogic/meson8b/config-6.6 ]; then
-          mv target/linux/amlogic/meson8b/config-6.6 target/linux/amlogic/meson8b/config-6.12
+        if [ -f target/linux/amlogic/meson8b/config-6.18 ]; then
+          mv target/linux/amlogic/meson8b/config-6.18 target/linux/amlogic/meson8b/config-6.12
         fi
 
-        sed -i -e 's/KERNEL_PATCHVER:=6.6/KERNEL_PATCHVER:=6.12/' \
+        sed -i -e 's/KERNEL_PATCHVER:=6.18/KERNEL_PATCHVER:=6.12/' \
                -e '/KERNEL_TESTING_PATCHVER/d' \
                -e '/autocore-arm/d' \
                -e 's/ pci pcie//' \
