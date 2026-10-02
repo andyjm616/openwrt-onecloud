@@ -143,10 +143,22 @@ jobs:
         [ -e config ] && cat config/config-apk >> openwrt/.config
           
     
+    - name: 加入 PassWall 源码
+      run: |
+        cd openwrt
+        rm -rf package/passwall-packages package/passwall-luci
+        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall-packages package/passwall-packages
+        git clone --depth=1 https://github.com/Openwrt-Passwall/openwrt-passwall package/passwall-luci
+        rm -rf feeds/luci/applications/luci-app-passwall
+        echo "PassWall 源码已加入"
+        find package/passwall-packages package/passwall-luci -maxdepth 2 -type f -name Makefile | head -30
+
     - name: 下载编译依赖
       id: package
       run: |
         cd openwrt
+        echo "CONFIG_PACKAGE_luci-app-passwall=y" >> .config
+        echo "CONFIG_PACKAGE_luci-i18n-passwall-zh-cn=y" >> .config
         make defconfig
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
@@ -206,5 +218,9 @@ jobs:
         git add .
         git commit -m "${{ env.tag }}"
         git branch -M main
-        git remote add origin https://github-action:$GITHUB_TOKEN@github.com/shiyu1314/6.12
-        git push -u origin main --force
+        git remote add origin https://github-action:$GITHUB_TOKEN@github.com/andyjm616/openwrt-onecloud
+        git fetch origin packages || true
+        git checkout -B packages
+        git add .
+        git commit -m "${{ env.tag }}"
+        git push -u origin packages --force
