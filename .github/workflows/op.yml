@@ -303,6 +303,18 @@ jobs:
         ! grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
         ! grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_openwrt_one=y' .config
 
+        # 再跑一次 defconfig 做 Kconfig 一致性校验，确认默认 OpenWrt One 不会重新抢回 target。
+        make defconfig
+
+        echo "===== defconfig 二次校验 ====="
+        grep '^CONFIG_TARGET_' .config | grep -E 'amlogic|mediatek' || true
+        grep -qx 'CONFIG_TARGET_amlogic=y' .config
+        grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+        grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek_filogic=y' .config
+        ! grep -qx 'CONFIG_TARGET_mediatek_filogic_DEVICE_openwrt_one=y' .config
+
         make download -j8
 
         find dl -size -1024c -exec ls -l {} \;
