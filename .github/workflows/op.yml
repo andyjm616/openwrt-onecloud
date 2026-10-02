@@ -192,7 +192,7 @@ jobs:
         # 保留官方 OpenWrt 25.12.5 的 Amlogic target，不再用 LEDE 整体覆盖。
         # 仅从公开 OneCloud 方案取得 DTS；镜像/设备定义以后按 25.12.5 的实际目录逐项补丁。
         rm -rf /tmp/onecloud-source
-        git clone --depth=1 --branch main \
+        git clone --depth=1 --branch master \
           https://github.com/garypang13/Actions-OpenWrt-Nginx.git \
           /tmp/onecloud-source
 
