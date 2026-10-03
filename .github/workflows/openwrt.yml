@@ -1,4 +1,4 @@
-name: openwrt
+name: OpenWrt OneCloud
 
 on:
   repository_dispatch:
