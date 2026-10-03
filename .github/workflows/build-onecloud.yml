@@ -68,12 +68,10 @@ jobs:
       - name: 克隆OpenWrt
         run: |
           set -eux
-          # 使用有权限的路径，不要用 /workdir
           WORKDIR="$GITHUB_WORKSPACE/workdir"
           mkdir -p "$WORKDIR"
           rm -rf "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
 
-          # 带重试的浅克隆
           for i in 1 2 3; do
             echo "=== 尝试第 $i 次克隆 ==="
             if git clone --depth 1 https://github.com/openwrt/openwrt.git "$WORKDIR/openwrt"; then
@@ -123,16 +121,18 @@ jobs:
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
           cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
+
+          # 修正后的检查（匹配实际文件内容）
           grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
-          grep -q 'DEVICE/thunder-onecloud' target/linux/amlogic/image/Makefile
-          grep -q 'DEVICE_DTS.*meson8b-onecloud' target/linux/amlogic/image/Makefile
+          grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
+          grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
+          echo "OneCloud target 添加成功"
 
       - name: 写入OneCloud配置
         run: |
           set -eux
           cd openwrt
 
-          # 基础配置
           cat > .config <<EOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
@@ -146,14 +146,67 @@ jobs:
           # CONFIG_PACKAGE_docker is not set
           EOF
 
-          # 动态写入自定义插件
           for pkg in ${CUSTOM_PLUGINS}; do
             echo "CONFIG_PACKAGE_${pkg}=y" >> .config
           done
 
-          # 合并公共配置（如果有）
           if [ -f "$GITHUB_WORKSPACE/config/config-common" ]; then
             cat "$GITHUB_WORKSPACE/config/config-common" >> .config
           fi
 
-          # 强制锁定目标，防止被覆盖
+          sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
+          cat >> .config <<'EOF'
+          CONFIG_TARGET_amlogic=y
+          CONFIG_TARGET_amlogic_meson8b=y
+          CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+          EOF
+
+          make defconfig
+
+          echo "===== TARGET ====="
+          grep '^CONFIG_TARGET_' .config
+          echo "===== ARCH ====="
+          grep -E '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' .config || true
+
+          grep -qx 'CONFIG_TARGET_amlogic=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+          ! grep -q '^CONFIG_TARGET_mediatek' .config
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+
+      - name: 下载依赖
+        run: |
+          set -eux
+          cd openwrt
+          make download -j8
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: 编译源码
+        run: |
+          set -eux
+          cd openwrt
+          grep -qx 'CONFIG_TARGET_amlogic=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+          ! grep -q '^CONFIG_TARGET_mediatek' .config
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+          test -d build_dir/target-arm_cortex-a5_musl
+          ! find build_dir -maxdepth 1 -type d -name 'target-aarch64*' -print -quit | grep -q .
+          echo '===== 开始OneCloud单线程详细编译 ====='
+          make -j1 V=s
+
+      - name: 整理固件
+        run: |
+          set -eux
+          cd openwrt
+          find bin/targets -type f -name '*.img' -print
+          find bin/targets -type f -name '*.img' -exec xz -9 --threads=0 {} \;
+          find bin/targets -type f -name '*.img.xz' -print
+          test -n "$(find bin/targets -type f -name '*.img.xz' -print -quit)"
+
+      - name: 上传固件到Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: onecloud-openwrt-25.12.5-k6.12
+          path: openwrt/bin/targets/**/*.img.xz
+          if-no-files-found: error
