@@ -70,10 +70,23 @@ jobs:
           set -eux
           mkdir -p /workdir
           rm -rf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
-          # 使用浅克隆 + 直接指定标签，大幅加快速度并避免超时失败
-          git clone --depth 1 --branch v25.12.5 https://github.com/openwrt/openwrt.git /workdir/openwrt
-          ln -s /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+
+          # 更稳妥的浅克隆方式（带重试）
+          for i in 1 2 3; do
+            echo "=== 尝试第 $i 次克隆 ==="
+            if git clone --depth 1 https://github.com/openwrt/openwrt.git /workdir/openwrt; then
+              break
+            fi
+            echo "克隆失败，等待后重试..."
+            sleep 15
+            rm -rf /workdir/openwrt
+          done
+
           cd /workdir/openwrt
+          git fetch --depth 1 origin tag v25.12.5
+          git checkout v25.12.5
+
+          ln -s /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
           git log -1 --oneline
           echo "OpenWrt clone success"
 
