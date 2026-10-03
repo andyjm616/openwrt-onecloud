@@ -111,7 +111,7 @@ jobs:
       run: |
         case $REPO_BRANCH in
           openwrt-25.12)
-            _release_tag=$(git tag --sort=taggerdate --list 'v25.*' | tail -1)
+            _release_tag=v25.12.5
             git checkout $_release_tag
             _prerelease=false
             ;;
@@ -202,9 +202,12 @@ jobs:
         #   - thunder-onecloud image 定义
         #   - meson8b-onecloud.dts
         rm -rf /tmp/onecloud-target target/linux/amlogic
-        git clone --depth=1 --branch master \
-          https://github.com/rmoyulong/OneCloud_OpenWrt.git \
-          /tmp/onecloud-target
+        git init /tmp/onecloud-target
+        cd /tmp/onecloud-target
+        git remote add origin https://github.com/rmoyulong/OneCloud_OpenWrt.git
+        git fetch --depth=1 origin ece61123be9f79107f5fd21448cdb8a10d8902b3
+        git checkout --detach ece61123be9f79107f5fd21448cdb8a10d8902b3
+        cd "$GITHUB_WORKSPACE/openwrt"
 
         test -d /tmp/onecloud-target/lede6.12/target/linux/amlogic
         test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/Makefile
