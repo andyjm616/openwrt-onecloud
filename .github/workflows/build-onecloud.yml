@@ -122,7 +122,6 @@ jobs:
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
           cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
 
-          # 修正后的检查（匹配实际文件内容）
           grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
           grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
           grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
@@ -185,13 +184,13 @@ jobs:
         run: |
           set -eux
           cd openwrt
+          # 只做配置检查，不再检查还不存在的 build_dir
           grep -qx 'CONFIG_TARGET_amlogic=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
-          test -d build_dir/target-arm_cortex-a5_musl
-          ! find build_dir -maxdepth 1 -type d -name 'target-aarch64*' -print -quit | grep -q .
+
           echo '===== 开始OneCloud单线程详细编译 ====='
           make -j1 V=s
 
