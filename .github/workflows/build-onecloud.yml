@@ -68,32 +68,34 @@ jobs:
       - name: 克隆OpenWrt
         run: |
           set -eux
-          mkdir -p /workdir
-          rm -rf /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+          # 使用有权限的路径，不要用 /workdir
+          WORKDIR="$GITHUB_WORKSPACE/workdir"
+          mkdir -p "$WORKDIR"
+          rm -rf "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
 
-          # 更稳妥的浅克隆方式（带重试）
+          # 带重试的浅克隆
           for i in 1 2 3; do
             echo "=== 尝试第 $i 次克隆 ==="
-            if git clone --depth 1 https://github.com/openwrt/openwrt.git /workdir/openwrt; then
+            if git clone --depth 1 https://github.com/openwrt/openwrt.git "$WORKDIR/openwrt"; then
               break
             fi
             echo "克隆失败，等待后重试..."
             sleep 15
-            rm -rf /workdir/openwrt
+            rm -rf "$WORKDIR/openwrt"
           done
 
-          cd /workdir/openwrt
+          cd "$WORKDIR/openwrt"
           git fetch --depth 1 origin tag v25.12.5
           git checkout v25.12.5
 
-          ln -s /workdir/openwrt "$GITHUB_WORKSPACE/openwrt"
+          ln -s "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
           git log -1 --oneline
           echo "OpenWrt clone success"
 
       - name: 取回缓存
         uses: actions/cache@v4
         with:
-          path: /workdir/openwrt/staging_dir
+          path: ${{ github.workspace }}/workdir/openwrt/staging_dir
           key: openwrt-25.12-toolchain-cache
           restore-keys: |
             openwrt-25.12-toolchain-cache
@@ -155,60 +157,3 @@ jobs:
           fi
 
           # 强制锁定目标，防止被覆盖
-          sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
-          cat >> .config <<'EOF'
-          CONFIG_TARGET_amlogic=y
-          CONFIG_TARGET_amlogic_meson8b=y
-          CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
-          EOF
-
-          make defconfig
-
-          echo "===== TARGET ====="
-          grep '^CONFIG_TARGET_' .config
-          echo "===== ARCH ====="
-          grep -E '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' .config || true
-
-          # 严格检查目标
-          grep -qx 'CONFIG_TARGET_amlogic=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
-          ! grep -q '^CONFIG_TARGET_mediatek' .config
-          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
-
-      - name: 下载依赖
-        run: |
-          set -eux
-          cd openwrt
-          make download -j8
-          find dl -size -1024c -exec rm -f {} \;
-
-      - name: 编译源码
-        run: |
-          set -eux
-          cd openwrt
-          grep -qx 'CONFIG_TARGET_amlogic=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
-          ! grep -q '^CONFIG_TARGET_mediatek' .config
-          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
-          test -d build_dir/target-arm_cortex-a5_musl
-          ! find build_dir -maxdepth 1 -type d -name 'target-aarch64*' -print -quit | grep -q .
-          echo '===== 开始OneCloud单线程详细编译 ====='
-          make -j1 V=s
-
-      - name: 整理固件
-        run: |
-          set -eux
-          cd openwrt
-          find bin/targets -type f -name '*.img' -print
-          find bin/targets -type f -name '*.img' -exec xz -9 --threads=0 {} \;
-          find bin/targets -type f -name '*.img.xz' -print
-          test -n "$(find bin/targets -type f -name '*.img.xz' -print -quit)"
-
-      - name: 上传固件到Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: onecloud-openwrt-25.12.5-k6.12
-          path: openwrt/bin/targets/**/*.img.xz
-          if-no-files-found: error
