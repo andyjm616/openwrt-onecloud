@@ -1,14 +1,13 @@
 name: OpenWrt OneCloud
 
 on:
-  repository_dispatch:
+  repository_dispatch: {}
   workflow_dispatch:
-
     inputs:
       ENABLE_DHCP:
         description: '是否开启DHCP'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
       OP_IP:
