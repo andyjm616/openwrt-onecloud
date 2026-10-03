@@ -195,58 +195,44 @@ jobs:
         set -eux
         cd openwrt
 
-        # OneCloud 在官方 OpenWrt 25.12 源码中没有可直接使用的 meson8b 设备定义。
-        # 按公开的 25.12 OneCloud 构建方案，只替换 Amlogic target，并保留官方 25.12 用户空间。
-        rm -rf /tmp/onecloud-source
-        git clone --depth=1 --branch 25.12 \
-          https://github.com/garypang13/Actions-OpenWrt-Nginx.git \
-          /tmp/onecloud-source
-
-        # 先克隆到临时目录，再完整复制 target/linux/amlogic。
-        rm -rf /tmp/lede-amlogic target/linux/amlogic
+        # 使用已经验证过的 OneCloud 6.12 target，而不是把 LEDE 6.18 强行改名为 6.12。
+        # 该仓库的 lede6.12 目录明确包含：
+        #   - target/linux/amlogic/Makefile (KERNEL_PATCHVER:=6.12)
+        #   - meson8b 子目标
+        #   - thunder-onecloud image 定义
+        #   - meson8b-onecloud.dts
+        rm -rf /tmp/onecloud-target target/linux/amlogic
         git clone --depth=1 --branch master \
-          https://github.com/coolsnowwolf/lede.git \
-          /tmp/lede-amlogic
-        test -f /tmp/lede-amlogic/target/linux/amlogic/image/meson8b.mk
-        mkdir -p target/linux/amlogic
-        cp -a /tmp/lede-amlogic/target/linux/amlogic/. target/linux/amlogic/
-        test -f target/linux/amlogic/image/meson8b.mk
+          https://github.com/rmoyulong/OneCloud_OpenWrt.git \
+          /tmp/onecloud-target
 
-        # LEDE 当前 Amlogic target 已使用 6.18；本工作流的 OpenWrt 25.12 内核为 6.12。
-        if [ -d target/linux/amlogic/patches-6.18 ]; then
-          mv target/linux/amlogic/patches-6.18 target/linux/amlogic/patches-6.12
-        fi
-        if [ -f target/linux/amlogic/config-6.18 ]; then
-          mv target/linux/amlogic/config-6.18 target/linux/amlogic/config-6.12
-        fi
-        if [ -f target/linux/amlogic/meson8b/config-6.18 ]; then
-          mv target/linux/amlogic/meson8b/config-6.18 target/linux/amlogic/meson8b/config-6.12
-        fi
+        test -d /tmp/onecloud-target/lede6.12/target/linux/amlogic
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/Makefile
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/boot.txt
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/meson8b/target.mk
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/meson8b/config-6.12
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
 
-        sed -i -e 's/KERNEL_PATCHVER:=6.18/KERNEL_PATCHVER:=6.12/' \
-               -e '/KERNEL_TESTING_PATCHVER/d' \
-               -e '/autocore-arm/d' \
-               -e 's/ pci pcie//' \
-               target/linux/amlogic/Makefile
+        cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
 
-        rm -rf target/linux/amlogic/patches-6.12/{001-dts-s905d-fix-high-load.patch,902-use-system-LED-for-OpenWrt.patch}
+        # 确认 target 真的是 6.12，并且镜像定义包含 thunder-onecloud。
+        grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
+        grep -q 'DEVICE/thunder-onecloud' target/linux/amlogic/image/Makefile
+        grep -q 'DEVICE_DTS := amlogic/meson8b-onecloud' target/linux/amlogic/image/Makefile
 
-        # 只复制 OneCloud 的 DTS，不应用包含外部 packit 路径的 onecloud.patch。
-        ONECLOUD_DTS=/tmp/onecloud-source/devices/amlogic_meson8b/diy/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
-        test -f "$ONECLOUD_DTS"
-        mkdir -p target/linux/amlogic/files/arch/arm/boot/dts/amlogic
-        cp -vf "$ONECLOUD_DTS" target/linux/amlogic/files/arch/arm/boot/dts/amlogic/
+        # 该 target 自带 OneCloud DTS；这里再做一次硬校验，避免后续编译时才发现设备树缺失。
+        test -f target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
 
-        # OneCloud 无线 SDIO 支持
-        patch -p1 --forward < /tmp/onecloud-source/devices/amlogic_meson8b/patches/BRCMFMAC_SDIO.patch
-
-        echo "===== OneCloud target ====="
-        test -f target/linux/amlogic/image/meson8b.mk
-        grep -n "thunder-onecloud" target/linux/amlogic/image/meson8b.mk
+        echo "===== OneCloud 6.12 target 检查 ====="
+        grep -n '^KERNEL_PATCHVER' target/linux/amlogic/Makefile
+        grep -n 'DEVICE/thunder-onecloud' target/linux/amlogic/image/Makefile
+        grep -n 'DEVICE_DTS.*meson8b-onecloud' target/linux/amlogic/image/Makefile
         grep -nE 'model|compatible|phy-mode|mmc' \
           target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts | head -80
 
-        echo "OneCloud target 已准备完成"
+        echo "OneCloud 6.12 target 已准备完成"
+
     - name: 加载自定义配置
       run: |
         [ -e files ] && mv files openwrt/files
