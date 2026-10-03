@@ -2,10 +2,45 @@ name: OneCloud Test
 
 on:
   workflow_dispatch:
+    inputs:
+      ENABLE_DHCP:
+        description: '是否开启DHCP'
+        required: false
+        default: false
+        type: boolean
+      OP_IP:
+        description: '静态IP地址'
+        required: false
+        default: '192.168.5.6'
+        type: string
+      OP_rootfs:
+        description: '预设镜像大小'
+        required: false
+        default: '800'
+        type: string
+      OP_author:
+        description: '定制作者'
+        required: false
+        default: 'andyjm'
+        type: string
+      CUSTOM_PLUGINS:
+        description: '自定义插件名称，用空格分隔'
+        required: false
+        default: 'luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-samba4'
+        type: string
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  build_firmware:
+    name: OneCloud Build - 玩客云-ws1608
+    runs-on: ubuntu-22.04
     steps:
-      - name: Test workflow dispatch
-        run: echo "workflow dispatch works"
+      - name: 检查工作流是否能进入构建环境
+        uses: actions/checkout@v4
+      - name: 显示构建参数
+        run: |
+          echo "OneCloud Test 工作流已成功进入"
+          echo "IP=${{ inputs.OP_IP }}"
+          echo "DHCP=${{ inputs.ENABLE_DHCP }}"
+          echo "ROOTFS=${{ inputs.OP_rootfs }}"
+          echo "AUTHOR=${{ inputs.OP_author }}"
+          echo "PLUGINS=${{ inputs.CUSTOM_PLUGINS }}"
