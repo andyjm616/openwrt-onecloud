@@ -1,5 +1,4 @@
 name: OneCloud Build
-
 on:
   workflow_dispatch:
     inputs:
@@ -14,7 +13,7 @@ on:
         default: '192.168.5.6'
         type: string
       OP_rootfs:
-        description: '预设镜像大小'
+        description: '预设镜像大小(MB)'
         required: false
         default: '800'
         type: string
@@ -28,7 +27,6 @@ on:
         required: false
         default: 'luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-samba4'
         type: string
-
 jobs:
   build_firmware:
     name: 编译固件 - 玩客云-ws1608
@@ -38,7 +36,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: 25.12
-
       - name: 释放磁盘空间
         run: |
           sudo swapoff -a || true
@@ -47,7 +44,6 @@ jobs:
           sudo systemctl stop docker || true
           sudo apt-get clean
           df -hT
-
       - name: 编译环境
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -56,7 +52,6 @@ jobs:
           sudo apt-get install -y tar img2simg build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-distutils python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'noreply@github.com'
-
       - name: 设置环境变量
         run: |
           TAG="$(date +'%Y%m%d')-$(openssl rand -hex 3)"
@@ -64,14 +59,12 @@ jobs:
           echo "OP_ROOTFS=${{ inputs.OP_rootfs }}" >> "$GITHUB_ENV"
           echo "OP_AUTHOR=${{ inputs.OP_author }}" >> "$GITHUB_ENV"
           echo "CUSTOM_PLUGINS=${{ inputs.CUSTOM_PLUGINS }}" >> "$GITHUB_ENV"
-
       - name: 克隆OpenWrt
         run: |
           set -eux
           WORKDIR="$GITHUB_WORKSPACE/workdir"
           mkdir -p "$WORKDIR"
           rm -rf "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
-
           for i in 1 2 3; do
             echo "=== 尝试第 $i 次克隆 ==="
             if git clone --depth 1 https://github.com/openwrt/openwrt.git "$WORKDIR/openwrt"; then
@@ -81,15 +74,12 @@ jobs:
             sleep 15
             rm -rf "$WORKDIR/openwrt"
           done
-
           cd "$WORKDIR/openwrt"
           git fetch --depth 1 origin tag v25.12.5
           git checkout v25.12.5
-
           ln -s "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
           git log -1 --oneline
           echo "OpenWrt clone success"
-
       - name: 取回缓存
         uses: actions/cache@v4
         with:
@@ -97,7 +87,6 @@ jobs:
           key: openwrt-25.12-toolchain-cache
           restore-keys: |
             openwrt-25.12-toolchain-cache
-
       - name: 配置feeds和PassWall
         run: |
           set -eux
@@ -107,7 +96,6 @@ jobs:
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
       - name: 添加OneCloud 6.12 target
         run: |
           set -eux
@@ -121,17 +109,14 @@ jobs:
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
           cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
-
           grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
           grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
           grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
           echo "OneCloud target 添加成功"
-
       - name: 写入OneCloud配置
         run: |
           set -eux
           cd openwrt
-
           cat > .config <<EOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
@@ -144,56 +129,47 @@ jobs:
           # CONFIG_PACKAGE_dockerd is not set
           # CONFIG_PACKAGE_docker is not set
           EOF
-
           for pkg in ${CUSTOM_PLUGINS}; do
             echo "CONFIG_PACKAGE_${pkg}=y" >> .config
           done
-
           if [ -f "$GITHUB_WORKSPACE/config/config-common" ]; then
             cat "$GITHUB_WORKSPACE/config/config-common" >> .config
           fi
-
           sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
-          cat >> .config <<'EOF'
+          cat >> .config <<EOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
           CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+          CONFIG_TARGET_KERNEL_PARTSIZE=32
+          CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
           EOF
-
           make defconfig
-
           echo "===== TARGET ====="
           grep '^CONFIG_TARGET_' .config
           echo "===== ARCH ====="
           grep -E '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' .config || true
-
           grep -qx 'CONFIG_TARGET_amlogic=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y'
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
-
       - name: 下载依赖
         run: |
           set -eux
           cd openwrt
           make download -j8
           find dl -size -1024c -exec rm -f {} \;
-
       - name: 编译源码
         run: |
           set -eux
           cd openwrt
-          # 只做配置检查，不再检查还不存在的 build_dir
           grep -qx 'CONFIG_TARGET_amlogic=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
-
           echo '===== 开始OneCloud单线程详细编译 ====='
           make -j1 V=s
-
       - name: 整理固件
         run: |
           set -eux
@@ -202,7 +178,6 @@ jobs:
           find bin/targets -type f -name '*.img' -exec xz -9 --threads=0 {} \;
           find bin/targets -type f -name '*.img.xz' -print
           test -n "$(find bin/targets -type f -name '*.img.xz' -print -quit)"
-
       - name: 上传固件到Artifacts
         uses: actions/upload-artifact@v4
         with:
