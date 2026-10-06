@@ -150,7 +150,7 @@ jobs:
           grep -E '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' .config || true
           grep -qx 'CONFIG_TARGET_amlogic=y' .config
           grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
-          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y'
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
       - name: 下载依赖
