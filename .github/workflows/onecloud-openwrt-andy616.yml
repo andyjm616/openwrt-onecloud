@@ -1,4 +1,4 @@
-name: OneCloud Build
+name: OneCloud openwrt
 on:
   workflow_dispatch:
     inputs:
