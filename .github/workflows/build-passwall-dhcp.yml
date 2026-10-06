@@ -26,6 +26,7 @@ jobs:
           ref: 25.12
       - name: 释放磁盘
         run: |
+          set -eux
           sudo swapoff -a || true
           sudo rm -f /swapfile /mnt/swapfile
           sudo docker image prune -a -f || true
@@ -41,6 +42,7 @@ jobs:
           git config --global user.email 'noreply@github.com'
       - name: 设置环境变量
         run: |
+          set -eux
           TAG="$(date +'%Y%m%d')-$(openssl rand -hex 3)"
           echo "tag=$TAG" >> "$GITHUB_ENV"
           echo "OP_ROOTFS=${{ inputs.OP_rootfs }}" >> "$GITHUB_ENV"
@@ -89,7 +91,7 @@ jobs:
         run: |
           set -eux
           cd openwrt
-          cat > .config <<'CONFIGEOF'
+          cat > .config <<CONFIGEOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
           CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
@@ -103,7 +105,7 @@ jobs:
           CONFIGEOF
           for pkg in ${CUSTOM_PLUGINS}; do echo "CONFIG_PACKAGE_${pkg}=y" >> .config; done
           sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
-          cat >> .config <<'CONFIGEOF'
+          cat >> .config <<CONFIGEOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
           CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
@@ -116,7 +118,7 @@ jobs:
           set -eux
           cd openwrt
           mkdir -p target/linux/amlogic/files/etc/config
-          cat > target/linux/amlogic/files/etc/config/network <<'NETEOF'
+          cat > target/linux/amlogic/files/etc/config/network <<NETEOF
           config interface 'loopback'
               option device 'lo'
               option proto 'static'
@@ -134,7 +136,7 @@ jobs:
               option type 'bridge'
               list ports 'eth0'
           NETEOF
-          cat > target/linux/amlogic/files/etc/config/dhcp <<'DHCPEOF'
+          cat > target/linux/amlogic/files/etc/config/dhcp <<DHCPEOF
           config dnsmasq
               option domainneeded '1'
               option boguspriv '1'
@@ -179,7 +181,6 @@ jobs:
         run: |
           set -eux
           cd openwrt
-          find bin/targets -type f -print
           find bin/targets -type f -name '*.img.gz' -print
           test -n "$(find bin/targets -type f -name '*.img.gz' -print -quit)"
       - name: 上传固件
