@@ -120,16 +120,16 @@ jobs:
           set -ux
           cd openwrt
           cat > .config <<CONFIGEOF
-CONFIG_TARGET_amlogic=y
-CONFIG_TARGET_amlogic_meson8b=y
-CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
-CONFIG_TARGET_KERNEL_PARTSIZE=32
-CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
-CONFIG_KERNEL_EXT4_FS_SECURITY=y
-CONFIG_PACKAGE_luci-app-passwall=y
-# CONFIG_PACKAGE_dockerd is not set
-# CONFIG_PACKAGE_docker is not set
-CONFIGEOF
+          CONFIG_TARGET_amlogic=y
+          CONFIG_TARGET_amlogic_meson8b=y
+          CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+          CONFIG_TARGET_KERNEL_PARTSIZE=32
+          CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
+          CONFIG_KERNEL_EXT4_FS_SECURITY=y
+          CONFIG_PACKAGE_luci-app-passwall=y
+          # CONFIG_PACKAGE_dockerd is not set
+          # CONFIG_PACKAGE_docker is not set
+          CONFIGEOF
           for pkg in ${CUSTOM_PLUGINS}; do
             echo "CONFIG_PACKAGE_${pkg}=y" >> .config
           done
@@ -138,10 +138,10 @@ CONFIGEOF
           fi
           sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
           cat >> .config <<'CONFIGEOF'
-CONFIG_TARGET_amlogic=y
-CONFIG_TARGET_amlogic_meson8b=y
-CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
-CONFIGEOF
+          CONFIG_TARGET_amlogic=y
+          CONFIG_TARGET_amlogic_meson8b=y
+          CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+          CONFIGEOF
           make defconfig
           echo "===== TARGET ====="
           grep '^CONFIG_TARGET_' .config
@@ -160,25 +160,25 @@ CONFIGEOF
           mkdir -p files/etc/config
           cat > files/etc/config/network <<NETWORKEOF
 
-config interface 'loopback'
-        option device 'lo'
-        option proto 'static'
-        option ipaddr '127.0.0.1'
-        option netmask '255.0.0.0'
+          config interface 'loopback'
+                  option device 'lo'
+                  option proto 'static'
+                  option ipaddr '127.0.0.1'
+                  option netmask '255.0.0.0'
 
-config device
-        option name 'br-lan'
-        option type 'bridge'
-        list ports 'eth0'
+          config device
+                  option name 'br-lan'
+                  option type 'bridge'
+                  list ports 'eth0'
 
-config interface 'lan'
-        option device 'br-lan'
-        option proto 'static'
-        option ipaddr '${OP_IP}'
-        option netmask '255.255.255.0'
-        option gateway '192.168.5.1'
-        option dns '192.168.5.1'
-NETWORKEOF
+          config interface 'lan'
+                  option device 'br-lan'
+                  option proto 'static'
+                  option ipaddr '${OP_IP}'
+                  option netmask '255.255.255.0'
+                  option gateway '192.168.5.1'
+                  option dns '192.168.5.1'
+          NETWORKEOF
           echo "网络配置写入完成，IP=${OP_IP}"
           cat files/etc/config/network
 
