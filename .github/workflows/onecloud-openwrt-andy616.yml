@@ -58,6 +58,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_ENV"
           echo "OP_ROOTFS=${{ inputs.OP_rootfs }}" >> "$GITHUB_ENV"
           echo "OP_AUTHOR=${{ inputs.OP_author }}" >> "$GITHUB_ENV"
+          echo "OP_IP=${{ inputs.OP_IP }}" >> "$GITHUB_ENV"
           echo "CUSTOM_PLUGINS=${{ inputs.CUSTOM_PLUGINS }}" >> "$GITHUB_ENV"
       - name: 克隆OpenWrt
         run: |
@@ -109,10 +110,10 @@ jobs:
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
           test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
           cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
+          chmod +x target/linux/amlogic/image/*.sh
           grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
           grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
           grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
-          chmod +x target/linux/amlogic/image/*.sh
           echo "OneCloud target 添加成功"
       - name: 写入OneCloud配置
         run: |
@@ -154,6 +155,33 @@ jobs:
           grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+      - name: 写入静态IP配置
+        run: |
+          set -eux
+          cd openwrt
+          mkdir -p target/linux/amlogic/files/etc/config
+          cat > target/linux/amlogic/files/etc/config/network <<EOF
+          config interface 'loopback'
+              option device 'lo'
+              option proto 'static'
+              option ipaddr '127.0.0.1'
+              option netmask '255.0.0.0'
+
+          config interface 'lan'
+              option device 'br-lan'
+              option proto 'static'
+              option ipaddr '${OP_IP}'
+              option netmask '255.255.255.0'
+              option gateway '192.168.5.1'
+              list dns '192.168.5.1'
+
+          config device
+              option name 'br-lan'
+              option type 'bridge'
+              list ports 'eth0'
+          EOF
+          echo "已写入静态IP: ${OP_IP}, 网关: 192.168.5.1"
+          cat target/linux/amlogic/files/etc/config/network
       - name: 下载依赖
         run: |
           set -eux
@@ -175,13 +203,14 @@ jobs:
         run: |
           set -eux
           cd openwrt
-          find bin/targets -type f -name '*.img' -print
-          find bin/targets -type f -name '*.img' -exec xz -9 --threads=0 {} \;
-          find bin/targets -type f -name '*.img.xz' -print
-          test -n "$(find bin/targets -type f -name '*.img.xz' -print -quit)"
+          echo "===== bin/targets 全部产物 ====="
+          find bin/targets -type f -print
+          echo "===== 查找 IMG.GZ ====="
+          find bin/targets -type f -name '*.img.gz' -print
+          test -n "$(find bin/targets -type f -name '*.img.gz' -print -quit)"
       - name: 上传固件到Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: onecloud-openwrt-k6.12-${{ env.tag }}
-          path: openwrt/bin/targets/**/*.img.xz
+          path: openwrt/bin/targets/**/*.img.gz
           if-no-files-found: error
