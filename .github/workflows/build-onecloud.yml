@@ -1,5 +1,4 @@
 name: OneCloud openwrt chatgpt
-
 on:
   workflow_dispatch:
     inputs:
@@ -8,390 +7,136 @@ on:
         required: false
         default: false
         type: boolean
-
       OP_IP:
         description: '静态IP地址'
         required: false
         default: '192.168.5.6'
         type: string
-
       OP_rootfs:
         description: '预设镜像大小(MB)'
         required: false
         default: '800'
         type: string
-
       OP_author:
         description: '定制作者'
         required: false
         default: 'andyjm'
         type: string
-
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
         required: false
         default: 'luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-samba4'
         type: string
-
 jobs:
   build_firmware:
     name: 编译固件 - 玩客云-ws1608
     runs-on: ubuntu-22.04
-
     steps:
-
-      # ============================================================
-      # 1. 检查仓库
-      # ============================================================
       - name: 检查分支
         uses: actions/checkout@v4
         with:
           ref: 25.12
-
-      # ============================================================
-      # 2. 释放磁盘
-      # ============================================================
       - name: 释放磁盘空间
         run: |
-          set -eux
-
           sudo swapoff -a || true
           sudo rm -f /swapfile /mnt/swapfile
-
           sudo docker image prune -a -f || true
           sudo systemctl stop docker || true
-
           sudo apt-get clean
-
           df -hT
-
-      # ============================================================
-      # 3. 编译环境
-      # ============================================================
       - name: 编译环境
         env:
           DEBIAN_FRONTEND: noninteractive
-
         run: |
-          set -eux
-
           sudo apt-get update
-
-          sudo apt-get install -y \
-            tar \
-            img2simg \
-            build-essential \
-            flex \
-            bison \
-            cmake \
-            g++ \
-            gawk \
-            gcc-multilib \
-            g++-multilib \
-            gettext \
-            git \
-            libfuse-dev \
-            libncurses5-dev \
-            libssl-dev \
-            python3 \
-            python3-pip \
-            python3-ply \
-            python3-distutils \
-            python3-pyelftools \
-            rsync \
-            unzip \
-            zlib1g-dev \
-            file \
-            wget \
-            subversion \
-            patch \
-            curl \
-            asciidoc \
-            binutils \
-            bzip2 \
-            lib32gcc-s1 \
-            libc6-dev-i386 \
-            uglifyjs \
-            texinfo \
-            libreadline-dev \
-            libglib2.0-dev \
-            xmlto \
-            libelf-dev \
-            libtool \
-            autopoint \
-            antlr3 \
-            gperf \
-            ccache \
-            swig \
-            coreutils \
-            haveged \
-            scons \
-            libpython3-dev \
-            rename \
-            qemu-utils
-
+          sudo apt-get install -y tar img2simg build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-distutils python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'noreply@github.com'
-
-      # ============================================================
-      # 4. 环境变量
-      # ============================================================
       - name: 设置环境变量
         run: |
-          set -eux
-
           TAG="$(date +'%Y%m%d')-$(openssl rand -hex 3)"
-
           echo "tag=$TAG" >> "$GITHUB_ENV"
-
-          echo "OP_ROOTFS=${{ inputs.OP_rootfs || '800' }}" >> "$GITHUB_ENV"
-
-          echo "OP_AUTHOR=${{ inputs.OP_author || 'andyjm' }}" >> "$GITHUB_ENV"
-
-          echo "CUSTOM_PLUGINS=${{ inputs.CUSTOM_PLUGINS || 'luci-theme-m3e luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-samba4' }}" >> "$GITHUB_ENV"
-
-          echo "OP_IP=${{ inputs.OP_IP || '192.168.5.6' }}" >> "$GITHUB_ENV"
-
-          echo "ENABLE_DHCP=${{ inputs.ENABLE_DHCP || 'false' }}" >> "$GITHUB_ENV"
-
-      # ============================================================
-      # 5. 克隆 OpenWrt 25.12.5
-      # ============================================================
+          echo "OP_ROOTFS=${{ inputs.OP_rootfs }}" >> "$GITHUB_ENV"
+          echo "OP_AUTHOR=${{ inputs.OP_author }}" >> "$GITHUB_ENV"
+          echo "CUSTOM_PLUGINS=${{ inputs.CUSTOM_PLUGINS }}" >> "$GITHUB_ENV"
       - name: 克隆OpenWrt
         run: |
           set -eux
-
           WORKDIR="$GITHUB_WORKSPACE/workdir"
-
           mkdir -p "$WORKDIR"
-
-          rm -rf "$WORKDIR/openwrt"
-          rm -rf "$GITHUB_WORKSPACE/openwrt"
-
+          rm -rf "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
           for i in 1 2 3; do
-
-            echo "========================================"
-            echo "尝试第 $i 次克隆 OpenWrt"
-            echo "========================================"
-
-            if git clone \
-              --depth 1 \
-              https://github.com/openwrt/openwrt.git \
-              "$WORKDIR/openwrt"
-            then
+            echo "=== 尝试第 $i 次克隆 ==="
+            if git clone --depth 1 https://github.com/openwrt/openwrt.git "$WORKDIR/openwrt"; then
               break
             fi
-
-            echo "克隆失败，等待 15 秒后重试..."
-
-            rm -rf "$WORKDIR/openwrt"
-
+            echo "克隆失败，等待后重试..."
             sleep 15
-
+            rm -rf "$WORKDIR/openwrt"
           done
-
-          test -d "$WORKDIR/openwrt"
-
           cd "$WORKDIR/openwrt"
-
           git fetch --depth 1 origin tag v25.12.5
-
           git checkout v25.12.5
-
           ln -s "$WORKDIR/openwrt" "$GITHUB_WORKSPACE/openwrt"
-
-          echo "===== OpenWrt版本 ====="
           git log -1 --oneline
-
           echo "OpenWrt clone success"
-
-      # ============================================================
-      # 6. 缓存
-      # ============================================================
       - name: 取回缓存
         uses: actions/cache@v4
-
         with:
           path: ${{ github.workspace }}/workdir/openwrt/staging_dir
-
           key: openwrt-25.12-toolchain-cache
-
           restore-keys: |
             openwrt-25.12-toolchain-cache
-
-      # ============================================================
-      # 7. PassWall feeds
-      # ============================================================
       - name: 配置feeds和PassWall
         run: |
           set -eux
-
+          sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' openwrt/feeds.conf.default
+          echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >> openwrt/feeds.conf.default
+          echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' >> openwrt/feeds.conf.default
           cd openwrt
-
-          sed -i \
-            's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g;
-             s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' \
-            feeds.conf.default
-
-          echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' \
-            >> feeds.conf.default
-
-          echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' \
-            >> feeds.conf.default
-
           ./scripts/feeds update -a
-
           ./scripts/feeds install -a
-
-          echo "===== PassWall检查 ====="
-
-          test -d feeds/passwall_packages
-          test -d feeds/passwall_luci
-
-          test -d feeds/passwall_luci/luci-app-passwall
-
-          echo "PassWall feeds OK"
-
-      # ============================================================
-      # 8. 添加 OneCloud 6.12 target
-      # ============================================================
       - name: 添加OneCloud 6.12 target
         run: |
           set -eux
-
-          rm -rf /tmp/onecloud-target
-
-          rm -rf openwrt/target/linux/amlogic
-
-          git clone \
-            --filter=blob:none \
-            --no-checkout \
-            https://github.com/rmoyulong/OneCloud_OpenWrt.git \
-            /tmp/onecloud-target
-
+          rm -rf /tmp/onecloud-target openwrt/target/linux/amlogic
+          git clone --filter=blob:none --no-checkout https://github.com/rmoyulong/OneCloud_OpenWrt.git /tmp/onecloud-target
           cd /tmp/onecloud-target
-
-          git checkout --detach \
-            ece61123be9f79107f5fd21448cdb8a10d8902b3
-
+          git checkout --detach ece61123be9f79107f5fd21448cdb8a10d8902b3
           cd "$GITHUB_WORKSPACE/openwrt"
-
-          # ---------- 源文件检查 ----------
-
-          test -d \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic
-
-          test -f \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic/Makefile
-
-          test -f \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
-
-          test -f \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          test -f \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
-
-          # ---------- 复制 OneCloud target ----------
-
-          cp -a \
-            /tmp/onecloud-target/lede6.12/target/linux/amlogic \
-            target/linux/
-
-          # ========================================================
-          # 关键修复：
-          # OneCloud 源码中的 .sh 文件可能没有执行权限。
-          # 必须在编译前统一恢复执行权限。
-          # ========================================================
-
-          find target/linux/amlogic \
-            -type f \
-            -name '*.sh' \
-            -exec chmod 755 {} \;
-
-          chmod 755 \
-            target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          # ---------- 权限必须确认 ----------
-
-          test -x \
-            target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          echo "===== gen_aml_emmc_img.sh 权限 ====="
-
-          ls -l \
-            target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          # ---------- target 检查 ----------
-
-          grep -q \
-            '^KERNEL_PATCHVER:=6.12$' \
-            target/linux/amlogic/Makefile
-
-          grep -q \
-            'Device/thunder-onecloud' \
-            target/linux/amlogic/image/Makefile
-
-          grep -q \
-            'meson8b-onecloud' \
-            target/linux/amlogic/image/Makefile
-
-          echo "========================================"
-          echo "OneCloud 6.12 target 添加成功"
-          echo "gen_aml_emmc_img.sh 可执行"
-          echo "========================================"
-
-      # ============================================================
-      # 9. 写入 OneCloud 配置
-      # ============================================================
+          test -d /tmp/onecloud-target/lede6.12/target/linux/amlogic
+          test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/Makefile
+          test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
+          test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
+          cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
+          chmod +x target/linux/amlogic/image/*.sh
+          grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
+          grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
+          grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
+          echo "OneCloud target 添加成功"
       - name: 写入OneCloud配置
         run: |
           set -eux
-
           cd openwrt
-
           cat > .config <<EOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
           CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
-
           CONFIG_TARGET_KERNEL_PARTSIZE=32
           CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
-
           CONFIG_KERNEL_EXT4_FS_SECURITY=y
-
           # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
-
           CONFIG_PACKAGE_luci-app-passwall=y
-
-          # Docker disabled
           # CONFIG_PACKAGE_dockerd is not set
           # CONFIG_PACKAGE_docker is not set
           EOF
-
-          # ---------- 自定义插件 ----------
-
           for pkg in ${CUSTOM_PLUGINS}; do
             echo "CONFIG_PACKAGE_${pkg}=y" >> .config
           done
-
-          # ---------- 如果仓库存在公共配置 ----------
-
           if [ -f "$GITHUB_WORKSPACE/config/config-common" ]; then
             cat "$GITHUB_WORKSPACE/config/config-common" >> .config
           fi
-
-          # ---------- 删除可能冲突的 target 配置 ----------
-
-          sed -i \
-            -E \
-            '/^CONFIG_TARGET_/d;
-             /^# CONFIG_TARGET_.* is not set$/d' \
-            .config
-
-          # ---------- 最终 target 配置 ----------
-
+          sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
           cat >> .config <<EOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
@@ -399,158 +144,45 @@ jobs:
           CONFIG_TARGET_KERNEL_PARTSIZE=32
           CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
           EOF
-
-          # ---------- 生成最终配置 ----------
-
           make defconfig
-
-          echo "========================================"
           echo "===== TARGET ====="
-          echo "========================================"
-
           grep '^CONFIG_TARGET_' .config
-
-          echo "========================================"
           echo "===== ARCH ====="
-          echo "========================================"
-
-          grep \
-            -E \
-            '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' \
-            .config || true
-
-          # ---------- 强制目标检查 ----------
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic=y' \
-            .config
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic_meson8b=y' \
-            .config
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' \
-            .config
-
-          ! grep -q \
-            '^CONFIG_TARGET_mediatek' \
-            .config
-
-          grep -q \
-            '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' \
-            .config
-
-          echo "OneCloud target configuration OK"
-
-      # ============================================================
-      # 10. 下载源码依赖
-      # ============================================================
+          grep -E '^CONFIG_TARGET_ARCH_PACKAGES=|^CONFIG_ARCH=' .config || true
+          grep -qx 'CONFIG_TARGET_amlogic=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+          ! grep -q '^CONFIG_TARGET_mediatek' .config
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
       - name: 下载依赖
         run: |
           set -eux
-
           cd openwrt
-
           make download -j8
-
-          find dl \
-            -size -1024c \
-            -exec rm -f {} \;
-
-      # ============================================================
-      # 11. 编译
-      # ============================================================
+          find dl -size -1024c -exec rm -f {} \;
       - name: 编译源码
         run: |
           set -eux
-
           cd openwrt
-
-          echo "========================================"
-          echo "===== 最终编译前检查 ====="
-          echo "========================================"
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic=y' \
-            .config
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic_meson8b=y' \
-            .config
-
-          grep -qx \
-            'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' \
-            .config
-
-          ! grep -q \
-            '^CONFIG_TARGET_mediatek' \
-            .config
-
-          grep -q \
-            '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' \
-            .config
-
-          # 最关键的镜像生成脚本权限检查
-          test -x \
-            target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          echo "===== gen_aml_emmc_img.sh ====="
-
-          ls -l \
-            target/linux/amlogic/image/gen_aml_emmc_img.sh
-
-          echo "========================================"
-          echo "===== 开始 OneCloud 单线程详细编译 ====="
-          echo "========================================"
-
+          grep -qx 'CONFIG_TARGET_amlogic=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b=y' .config
+          grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
+          ! grep -q '^CONFIG_TARGET_mediatek' .config
+          grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+          echo '===== 开始OneCloud单线程详细编译 ====='
           make -j1 V=s
-
-      # ============================================================
-      # 12. 整理固件
-      # ============================================================
       - name: 整理固件
         run: |
           set -eux
-
           cd openwrt
-
-          echo "===== 查找 IMG ====="
-
-          find bin/targets \
-            -type f \
-            -name '*.img' \
-            -print
-
-          test -n \
-            "$(find bin/targets -type f -name '*.img' -print -quit)"
-
-          echo "===== 压缩固件 ====="
-
-          find bin/targets \
-            -type f \
-            -name '*.img' \
-            -exec xz -9 --threads=0 {} \;
-
-          echo "===== 最终固件 ====="
-
-          find bin/targets \
-            -type f \
-            -name '*.img.xz' \
-            -print
-
-          test -n \
-            "$(find bin/targets -type f -name '*.img.xz' -print -quit)"
-
-      # ============================================================
-      # 13. 上传固件
-      # ============================================================
+          echo "===== bin/targets 全部产物 ====="
+          find bin/targets -type f -print
+          echo "===== 查找 IMG.GZ ====="
+          find bin/targets -type f -name '*.img.gz' -print
+          test -n "$(find bin/targets -type f -name '*.img.gz' -print -quit)"
       - name: 上传固件到Artifacts
         uses: actions/upload-artifact@v4
-
         with:
           name: onecloud-openwrt-k6.12-${{ env.tag }}
-
-          path: openwrt/bin/targets/**/*.img.xz
-
+          path: openwrt/bin/targets/**/*.img.gz
           if-no-files-found: error
