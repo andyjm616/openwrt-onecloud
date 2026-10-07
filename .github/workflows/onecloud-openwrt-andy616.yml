@@ -21,7 +21,7 @@ on:
       OP_author:
         description: '定制作者'
         required: false
-        default: 'andyjm616'
+        default: 'shiyu1314'
         type: string
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
@@ -118,19 +118,31 @@ jobs:
           ${{ env.REPO_BRANCH }}-toolchain-cache
     - name: patch修补
       run: |
-        [ -e patch ] && cp -rf patch/apk-tools/*.patch openwrt/package/system/apk/patches
+        # 可选 apk-tools 补丁（无文件时不报错）
+        if [ -d patch/apk-tools ]; then
+          mkdir -p openwrt/package/system/apk/patches
+          find patch/apk-tools -maxdepth 1 -name '*.patch' -exec cp -f {} openwrt/package/system/apk/patches/ \;
+        fi
+
         curl -s https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in > openwrt/config/Config-kernel.in
         sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' openwrt/feeds.conf.default
         echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >> openwrt/feeds.conf.default
         echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' >> openwrt/feeds.conf.default
+
         cd openwrt
-        find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1
+        find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1 || true
         ./scripts/feeds update -a
         ./scripts/feeds install -a
         cd ..
-        [ -e patch ] && cp -rf patch/target openwrt
-        [ -e patch ] && cp -rf patch/luci/*.patch openwrt/feeds/luci
-        [ -e patch ] && cp -rf patch/diy/*.patch openwrt
+
+        # 可选其他补丁
+        [ -d patch/target ] && cp -rf patch/target openwrt/ || true
+        if [ -d patch/luci ]; then
+          find patch/luci -maxdepth 1 -name '*.patch' -exec cp -f {} openwrt/feeds/luci/ \;
+        fi
+        if [ -d patch/diy ]; then
+          find patch/diy -maxdepth 1 -name '*.patch' -exec cp -f {} openwrt/ \;
+        fi
     - name: 加载自定义脚本
       run: |
         chmod +x $DIY_P1_SH
