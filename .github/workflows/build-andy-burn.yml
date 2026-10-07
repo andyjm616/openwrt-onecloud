@@ -231,12 +231,12 @@ jobs:
           # 7. 打包成晶晨线刷包
           OUT="$GITHUB_WORKSPACE/onecloud-burn-k6.12-${tag}.img"
           ( cd "$PKG" && /tmp/aml_image_v2_packer -r image.cfg . "$OUT" )
-          # 8. 校验魔数 CA 6E DE 1B
-          echo "===== 校验线刷包头 ====="
-          xxd -l 16 "$OUT"
-          MAGIC="$(xxd -p -l 4 "$OUT")"
-          echo "magic=$MAGIC"
-          test "$MAGIC" = "ca6ede1b"
+          # 8. 检查生成结果（新版 packer 是 version 0x2，头部是 CRC，不再检查旧魔数）
+          echo "===== 校验线刷包 ====="
+          ls -lh "$OUT"
+          xxd -l 32 "$OUT"
+          test -f "$OUT"
+          test -s "$OUT"
           # 9. xz 压缩
           xz -9 --threads=0 "$OUT"
           ls -lh "$GITHUB_WORKSPACE"/*.img.xz
