@@ -137,10 +137,12 @@ jobs:
             cat "$GITHUB_WORKSPACE/config/config-common" >> .config
           fi
           sed -i -E '/^CONFIG_TARGET_/d; /^# CONFIG_TARGET_.* is not set$/d' .config
-          cat >> .config <<'CONFIGEOF'
+          cat >> .config <<CONFIGEOF
           CONFIG_TARGET_amlogic=y
           CONFIG_TARGET_amlogic_meson8b=y
           CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+          CONFIG_TARGET_KERNEL_PARTSIZE=32
+          CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}
           CONFIGEOF
           make defconfig
           echo "===== TARGET ====="
@@ -152,6 +154,9 @@ jobs:
           grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+          grep -qx 'CONFIG_TARGET_KERNEL_PARTSIZE=32' .config
+          grep -qx "CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}" .config
+          echo "rootfs 分区大小校验通过: ${OP_ROOTFS}MB"
 
       - name: 写入静态IP网络配置
         run: |
@@ -198,6 +203,8 @@ jobs:
           grep -qx 'CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y' .config
           ! grep -q '^CONFIG_TARGET_mediatek' .config
           grep -q '^CONFIG_TARGET_ARCH_PACKAGES="arm_cortex-a5_neon-vfpv4"' .config
+          grep -qx 'CONFIG_TARGET_KERNEL_PARTSIZE=32' .config
+          grep -qx "CONFIG_TARGET_ROOTFS_PARTSIZE=${OP_ROOTFS}" .config
           echo '===== 开始OneCloud单线程详细编译 ====='
           make -j1 V=s
 
