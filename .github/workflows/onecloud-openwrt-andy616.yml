@@ -149,11 +149,26 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P1_SH
         cd ..
-        [ -e patch ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files
+        [ -e patch ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support || true
+        [ -e patch ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files || true
     - name: 添加玩客云
       run: |
-        git clone https://shiyu1314:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/shiyu1314/s805 -b 6.12 openwrt/target/linux/amlogic
+        set -eux
+        rm -rf /tmp/onecloud-target openwrt/target/linux/amlogic
+        git clone --filter=blob:none --no-checkout https://github.com/rmoyulong/OneCloud_OpenWrt.git /tmp/onecloud-target
+        cd /tmp/onecloud-target
+        git checkout --detach ece61123be9f79107f5fd21448cdb8a10d8902b3
+        cd $GITHUB_WORKSPACE/openwrt
+        test -d /tmp/onecloud-target/lede6.12/target/linux/amlogic
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/Makefile
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/image/Makefile
+        test -f /tmp/onecloud-target/lede6.12/target/linux/amlogic/files/arch/arm/boot/dts/amlogic/meson8b-onecloud.dts
+        cp -a /tmp/onecloud-target/lede6.12/target/linux/amlogic target/linux/
+        chmod +x target/linux/amlogic/image/*.sh 2>/dev/null || true
+        grep -q '^KERNEL_PATCHVER:=6.12$' target/linux/amlogic/Makefile
+        grep -q 'Device/thunder-onecloud' target/linux/amlogic/image/Makefile
+        grep -q 'meson8b-onecloud' target/linux/amlogic/image/Makefile
+        echo "OneCloud target 添加成功"
     - name: 加载自定义配置
       run: |
         [ -e files ] && mv files openwrt/files
