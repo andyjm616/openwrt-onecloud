@@ -11,4 +11,4 @@
 
   - [`u-boot`](https://github.com/hzyitc/u-boot-onecloud)
 
-ip地址192.168.5.6，改编于shiyu1314大佬的openwrt-25.12-k6.12-onecloud固件，特此感谢！
+ip地址192.168.5.6，改编于shiyu1314大佬2026.9.5日的openwrt-25.12-k6.12-onecloud固件，特此感谢！
