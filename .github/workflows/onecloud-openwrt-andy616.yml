@@ -66,7 +66,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractive
       run: |
         sudo apt-get update
-        sudo apt-get install -y tar img2simg build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-distutils python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils
+        sudo apt-get install -y tar img2simg build-essential flex bison cmake g++ gawk gcc-multilib g++-multilib gettext git libfuse-dev libncurses5-dev libssl-dev python3 python3-pip python3-ply python3-distutils python3-pyelftools rsync unzip zlib1g-dev file wget subversion patch upx-ucl autoconf automake curl asciidoc binutils bzip2 lib32gcc-s1 libc6-dev-i386 uglifyjs msmtp texinfo libreadline-dev libglib2.0-dev xmlto libelf-dev libtool autopoint antlr3 gperf ccache swig coreutils haveged scons libpython3-dev rename qemu-utils xxd util-linux fdisk
         sudo apt-get clean
         git config --global user.name 'GitHub Actions' && git config --global user.email 'noreply@github.com'
         sudo timedatectl set-timezone 'Asia/Shanghai'
@@ -120,24 +120,19 @@ jobs:
           ${{ env.REPO_BRANCH }}-toolchain-cache
     - name: patch修补
       run: |
-        # 可选 apk-tools 补丁（无文件时不报错）
         if [ -d patch/apk-tools ]; then
           mkdir -p openwrt/package/system/apk/patches
           find patch/apk-tools -maxdepth 1 -name '*.patch' -exec cp -f {} openwrt/package/system/apk/patches/ \;
         fi
-
         curl -s https://raw.githubusercontent.com/immortalwrt/immortalwrt/master/config/Config-kernel.in > openwrt/config/Config-kernel.in
         sed -i 's#https://git\.openwrt\.org/feed#https://github.com/openwrt#g; s#https://git\.openwrt\.org/project#https://github.com/openwrt#g' openwrt/feeds.conf.default
         echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main' >> openwrt/feeds.conf.default
         echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' >> openwrt/feeds.conf.default
-
         cd openwrt
         find ./staging_dir/ -name '*' -exec touch {} \; >/dev/null 2>&1 || true
         ./scripts/feeds update -a
         ./scripts/feeds install -a
         cd ..
-
-        # 可选其他补丁
         [ -d patch/target ] && cp -rf patch/target openwrt/ || true
         if [ -d patch/luci ]; then
           find patch/luci -maxdepth 1 -name '*.patch' -exec cp -f {} openwrt/feeds/luci/ \;
@@ -147,12 +142,16 @@ jobs:
         fi
     - name: 加载自定义脚本
       run: |
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
-        cd ..
-        [ -e patch ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support || true
-        [ -e patch ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files || true
+        if [ -f "$GITHUB_WORKSPACE/$DIY_P1_SH" ]; then
+          chmod +x "$GITHUB_WORKSPACE/$DIY_P1_SH"
+          cd openwrt
+          "$GITHUB_WORKSPACE/$DIY_P1_SH"
+          cd ..
+        else
+          echo "自定义脚本 $DIY_P1_SH 不存在，跳过"
+        fi
+        [ -e patch/nginx/luci.locations ] && cp -rf patch/nginx/luci.locations openwrt/feeds/packages/net/nginx/files-luci-support || true
+        [ -e patch/nginx/uci.conf.template ] && cp -rf patch/nginx/uci.conf.template openwrt/feeds/packages/net/nginx-util/files || true
     - name: 添加玩客云
       run: |
         set -eux
@@ -173,7 +172,7 @@ jobs:
         echo "OneCloud target 添加成功"
     - name: 加载自定义配置
       run: |
-        [ -e files ] && mv files openwrt/files
+        [ -e files ] && mv files openwrt/files || true
         cat <<EOF >>openwrt/.config
         CONFIG_TARGET_amlogic=y
         CONFIG_TARGET_amlogic_meson8b=y
@@ -183,9 +182,9 @@ jobs:
         CONFIG_KERNEL_EXT4_FS_SECURITY=y
         # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
         EOF
-        [ -e config ] && cat config/config-common >> openwrt/.config
+        [ -e config ] && cat config/config-common >> openwrt/.config || true
         if [[ "${{ github.event.inputs.ENABLE_DHCP }}" == "false" ]]; then
-          rm -rf openwrt/files/etc/uci-defaults/dhcp-lan
+          rm -rf openwrt/files/etc/uci-defaults/dhcp-lan || true
           sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" openwrt/package/base-files/files/bin/config_generate
         fi
         IFS=' ' read -r -a plugins <<< "${{ github.event.inputs.CUSTOM_PLUGINS }}"
@@ -213,31 +212,68 @@ jobs:
     - name: 查看磁盘使用情况
       if: (!cancelled())
       run: df -hT
-    - name: 整理文件
+    - name: 打包标准USB线刷包
       id: organize
       run: |
-        gunzip openwrt/bin/targets/*/*/*.gz
-        for f in openwrt/bin/targets/*/*/*.img; do
-          xz -9 --threads=0 --compress "$f"
-        done
-        rm -rf openwrt/bin/targets/*/*/*.img
-        rm -rf openwrt/bin/targets/*/*/*.gz
-        cd openwrt/bin/targets/*/*
-        mv *.xz ${{ env.REPO_BRANCH }}-k6.12-onecloud_burn.img.xz
-        rm -rf packages
-        rm -rf *.buildinfo
-        rm -rf profiles.json
-        rm -rf *.manifest
-        rm -rf *.sha
-        rm -rf sha256sums
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+        set -eux
+        cd openwrt
+        # 1. 找到并解压裸镜像
+        IMG_GZ="$(find bin/targets -type f -name '*.img.gz' | head -1)"
+        echo "裸镜像: $IMG_GZ"
+        test -n "$IMG_GZ"
+        gunzip -kf "$IMG_GZ"
+        IMG="${IMG_GZ%.gz}"
+        ls -lh "$IMG"
+        # 2. 解析 MBR 分区表
+        sfdisk -J "$IMG" > /tmp/parts.json
+        cat /tmp/parts.json
+        # 3. 分区类型：c=FAT32(boot)，83=Linux(rootfs)
+        getpart() {
+          python3 -c "import json;d=json.load(open('/tmp/parts.json'));ps=d['partitiontable']['partitions'];p=[x for x in ps if x['type'].upper()=='$1'][0];print(p['$2'])"
+        }
+        BOOT_START="$(getpart C start)"
+        BOOT_SIZE="$(getpart C size)"
+        ROOT_START="$(getpart 83 start)"
+        ROOT_SIZE="$(getpart 83 size)"
+        echo "boot:   start=$BOOT_START size=$BOOT_SIZE"
+        echo "rootfs: start=$ROOT_START size=$ROOT_SIZE"
+        # 4. 提取分区
+        dd if="$IMG" of=/tmp/boot.PARTITION   bs=512 skip="$BOOT_START" count="$BOOT_SIZE" status=none
+        dd if="$IMG" of=/tmp/rootfs.PARTITION bs=512 skip="$ROOT_START" count="$ROOT_SIZE" status=none
+        ls -l /tmp/boot.PARTITION /tmp/rootfs.PARTITION
+        # 5. 组装打包目录（需要仓库中有 burn-base 目录）
+        PKG=/tmp/pkg
+        rm -rf "$PKG"; mkdir -p "$PKG"
+        cp "$GITHUB_WORKSPACE/burn-base/"* "$PKG/"
+        cp /tmp/boot.PARTITION /tmp/rootfs.PARTITION "$PKG/"
+        ls -l "$PKG"
+        # 6. 下载 aml_image_v2_packer
+        wget -q -O /tmp/aml_image_v2_packer \
+          https://github.com/khadas/utils/raw/master/aml-flash-tool/tools/linux-x86/aml_image_v2_packer
+        chmod +x /tmp/aml_image_v2_packer
+        # 7. 打包成标准晶晨线刷包
+        OUT="$GITHUB_WORKSPACE/onecloud-burn-k6.12-${tag}.img"
+        ( cd "$PKG" && /tmp/aml_image_v2_packer -r image.cfg . "$OUT" )
+        # 8. 校验（version 0x2 格式，可被 USB Burning Tool 正常导入）
+        echo "===== 校验线刷包 ====="
+        test -s "$OUT"
+        ls -lh "$OUT"
+        xxd -l 16 "$OUT"
+        VERSION="$(xxd -p -s 4 -l 4 "$OUT")"
+        echo "version=$VERSION"
+        test "$VERSION" = "02000000"
+        echo "===== 线刷包校验通过（version 0x2）====="
+        # 9. xz 压缩
+        xz -9 --threads=0 "$OUT"
+        ls -lh "$GITHUB_WORKSPACE"/*.img.xz
+        echo "FIRMWARE=$GITHUB_WORKSPACE" >> $GITHUB_ENV
     - name: 上传固件到Releases
       uses: softprops/action-gh-release@v2.1.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ env.release_tag }}-${{env.tag}}
-        files: ${{ env.FIRMWARE }}/*
+        files: ${{ env.FIRMWARE }}/*.img.xz
         body: |
           ====================固件信息=======================
            源码：${{ env.REPO_URL }}
@@ -248,6 +284,7 @@ jobs:
            定制作者：${{ github.event.inputs.OP_author }}
            扩容：sh 1.sh
            默认密码：无
+           格式：标准晶晨线刷包（version 0x2）
     - name: 清理Releases
       uses: dev-drprasad/delete-older-releases@v0.3.4
       with:
