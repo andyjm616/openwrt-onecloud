@@ -10,7 +10,7 @@ on:
       OP_rootfs:
         description: '预设镜像大小(MB)'
         required: false
-        default: '800'
+        default: '600'
         type: string
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
@@ -213,49 +213,3 @@ jobs:
           ROOT_START="$(getpart 83 start)"
           ROOT_SIZE="$(getpart 83 size)"
           echo "boot:   start=$BOOT_START size=$BOOT_SIZE"
-          echo "rootfs: start=$ROOT_START size=$ROOT_SIZE"
-          # 4. 提取两个分区内容
-          dd if="$IMG" of=/tmp/boot.PARTITION   bs=512 skip="$BOOT_START" count="$BOOT_SIZE" status=none
-          dd if="$IMG" of=/tmp/rootfs.PARTITION bs=512 skip="$ROOT_START" count="$ROOT_SIZE" status=none
-          ls -l /tmp/boot.PARTITION /tmp/rootfs.PARTITION
-          # 5. 组装打包目录（固定文件来自 burn-base）
-          PKG=/tmp/pkg
-          rm -rf "$PKG"; mkdir -p "$PKG"
-          cp "$GITHUB_WORKSPACE/burn-base/"* "$PKG/"
-          cp /tmp/boot.PARTITION /tmp/rootfs.PARTITION "$PKG/"
-          ls -l "$PKG"
-          # 6. 下载 Linux 版 aml_image_v2_packer
-          wget -q -O /tmp/aml_image_v2_packer \
-            https://github.com/khadas/utils/raw/master/aml-flash-tool/tools/linux-x86/aml_image_v2_packer
-          chmod +x /tmp/aml_image_v2_packer
-          # 7. 打包成晶晨线刷包
-          OUT="$GITHUB_WORKSPACE/onecloud-burn-k6.12-${tag}.img"
-          ( cd "$PKG" && /tmp/aml_image_v2_packer -r image.cfg . "$OUT" )
-          # 8. 校验线刷包
-          echo "===== 校验线刷包 ====="
-          test -s "$OUT"
-          echo "线刷包生成成功："
-          ls -lh "$OUT"
-
-          echo "===== 线刷包头 ====="
-          xxd -l 16 "$OUT"
-
-          HEADER="$(xxd -p -l 8 "$OUT")"
-          echo "header=$HEADER"
-
-          VERSION="$(xxd -p -s 4 -l 4 "$OUT")"
-          echo "version=$VERSION"
-
-          test "$VERSION" = "02000000"
-
-          echo "===== 线刷包校验通过 ====="
-
-          # 9. xz 压缩
-          xz -9 --threads=0 "$OUT"
-          ls -lh "$GITHUB_WORKSPACE"/*.img.xz
-      - name: 上传线刷包到Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: onecloud-burn-k6.12-${{ env.tag }}
-          path: ./*.img.xz
-          if-no-files-found: error
